@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Analyze the nutrition label on packaged food and get an educational nutrition score.">
+  <title>NutriLens — Food Health Analyzer</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+</head>
+<body>
+  <header class="topbar"><a class="brand" href="#"><span class="brand-icon">✳</span><span>Nutri<span class="brand-accent">Lens</span><small>FOOD LABEL ANALYZER</small></span></a><span class="top-pill"><i></i> Private, in-browser analysis</span></header>
+  <main>
+    <section class="hero"><div class="eyebrow"><span>✦</span> MAKE INFORMED FOOD CHOICES</div><h1>Know what’s in<br><em>your food.</em></h1><p class="hero-copy">Search for a packaged food by its exact product name, or upload the printed nutrition panel if it is not listed. Get a transparent nutrition estimate.</p></section>
+    <section class="panel search-panel">
+      <div class="section-heading"><span class="step">01</span><div><h2>Search by product name</h2><p>Enter the product name and brand as printed on the packet. We’ll look for matching product data.</p></div></div>
+      <form id="productSearchForm" class="product-search-form">
+        <label class="search-field"><span>Exact product name *</span><input id="productName" type="text" required minlength="2" placeholder="e.g. Maggi 2-Minute Noodles Masala"></label>
+        <label class="search-field"><span>Brand (optional)</span><input id="productBrand" type="text" placeholder="e.g. Nestlé"></label>
+        <button id="productSearchBtn" class="primary-btn" type="submit">Search product data <span>→</span></button>
+      </form>
+      <p class="privacy-note">Searches the Open Food Facts public product database. Internet connection required. Product coverage may vary by country and brand.</p>
+      <p id="searchStatus" class="search-status" role="status" hidden></p>
+      <div id="productMatches" class="product-matches" hidden></div>
+    </section>
+    <div class="method-divider"><span>OR</span></div>
+    <section class="workspace">
+      <div class="panel upload-panel">
+        <div class="section-heading"><span class="step">02</span><div><h2>Upload food label</h2><p>Use a clear, well-lit photo of the packet’s printed label.</p></div></div>
+        <input id="fileInput" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+        <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Choose or drop a food label image"><div id="uploadContent"><div class="upload-symbol">↑</div><h3>Drop your label image here</h3><p>or <button id="browseBtn" class="text-button" type="button">browse files</button></p><span class="file-hint">PNG, JPG or WEBP · Up to 10 MB</span></div><img id="preview" alt="Selected food label preview" hidden><button id="removeImage" class="remove-image" type="button" hidden aria-label="Remove image">×</button></div>
+        <div class="privacy-note"><span>⌑</span> Your image is processed in this browser using OCR. It is not uploaded to a project server.</div>
+        <button id="analyzeBtn" class="primary-btn" disabled><span>✦</span> Analyze nutrition label <span>→</span></button>
+        <div id="progressWrap" class="progress-wrap" hidden><div class="progress-top"><span id="progressText">Preparing image…</span><span id="progressPct">0%</span></div><div class="progress-track"><div id="progressBar"></div></div></div>
+        <p id="error" class="error" role="alert" hidden></p>
+      </div>
+      <div class="panel guide-panel"><div class="section-heading"><span class="guide-icon">◎</span><div><h2>For the best results</h2><p>A few tips for a more accurate reading.</p></div></div><div class="tip"><span class="tip-number">1</span><div><b>Capture the full panel</b><p>Include the complete nutrition table and serving size.</p></div></div><div class="tip"><span class="tip-number">2</span><div><b>Keep text sharp</b><p>Avoid glare, shadows, blur, and steep angles.</p></div></div><div class="tip"><span class="tip-number">3</span><div><b>Check the extracted values</b><p>OCR can misread small print. Review and edit values before scoring.</p></div></div><div class="guide-callout"><span>ⓘ</span><p><b>Good to know</b><br>Nutrition panels vary by country and brand. This tool gives an educational estimate, not medical advice.</p></div></div>
+    </section>
+    <section id="results" class="results" hidden>
+      <div class="results-header"><div><div class="eyebrow">03 · YOUR RESULTS</div><h2>Nutrition overview</h2><p id="resultSource">Review the detected values, correct anything inaccurate, then calculate your score.</p></div><button id="resetBtn" class="secondary-btn">Start over ↗</button></div>
+      <div class="results-grid"><div class="panel score-panel"><div class="score-caption">ESTIMATED NUTRITION SCORE</div><div class="score-ring" id="scoreRing"><div><strong id="scoreValue">—</strong><span>out of 100</span></div></div><div id="ratingLabel" class="rating-label">Review label values</div><p id="scoreSummary" class="score-summary">Score will appear after you review the extracted values.</p><div class="score-footnote">A heuristic estimate based on detected nutrients. Not a validated medical or regulatory grade.</div></div>
+      <div class="panel nutrient-panel"><div class="section-heading compact"><div><h2>Detected nutrition</h2><p>Values are interpreted per 100 g/ml when the label makes that clear. Edit before scoring.</p></div></div><div class="nutrient-grid" id="nutrientGrid"></div><div class="score-actions"><button id="scoreBtn" class="primary-btn">Calculate score <span>→</span></button></div></div></div>
+      <div class="panel details-panel"><div class="section-heading compact"><div><h2>What we noticed</h2><p>Insights based on the values you confirm.</p></div></div><div id="insights" class="insights"></div></div>
+      <details class="panel raw-panel"><summary>View / edit recognized label text</summary><textarea id="rawText" rows="7" spellcheck="false" placeholder="OCR text will appear here…"></textarea><p class="muted">If a value was missed, you can edit this text and run extraction again.</p><button id="reparseBtn" class="secondary-btn">Extract values again</button></details>
+    </section>
+    <footer><span>NutriLens <span class="muted">· Food Health Analyzer</span></span><p class="footer-note"><b>How to read this result</b> These are approximate educational guides, not an official Nutri-Score or medical assessment. Missing values and the ingredient list can change the overall picture.</p><span>Built with HTML, CSS & JavaScript</span></footer>
+  </main><script src="script.js"></script>
+</body></html>
