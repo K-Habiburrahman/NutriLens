@@ -18,7 +18,11 @@
         <label class="search-field"><span>Brand (optional)</span><input id="productBrand" type="text" placeholder="e.g. Nestlé"></label>
         <button id="productSearchBtn" class="primary-btn" type="submit">Search product data <span>→</span></button>
       </form>
-      <p class="privacy-note">Searches the Open Food Facts public product database. Internet connection required. Product coverage may vary by country and brand.</p>
+      <p class="privacy-note">Searches Open Food Facts and USDA FoodData Central when configured. IFCT 2017 is provided as an Indian reference for raw foods, not a live packaged-product API.</p>
+      <div class="data-source-strip">
+        <a href="https://www.nin.res.in/ebooks/IFCT2017_16122024.pdf" target="_blank" rel="noopener noreferrer"><strong>Indian Food Composition Tables (IFCT 2017)</strong><span>Official ICMR–NIN reference · raw Indian foods</span></a>
+        <a href="https://fdc.nal.usda.gov/api-guide.html" target="_blank" rel="noopener noreferrer"><strong>USDA FoodData Central</strong><span>Generic foods and available branded products</span></a>
+      </div>
       <p id="searchStatus" class="search-status" role="status" hidden></p>
       <div id="productMatches" class="product-matches" hidden></div>
     </section>

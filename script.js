@@ -1,13 +1,17 @@
 // Shared DOM helper must be declared before any code uses it.
 const $ = (id) => document.getElementById(id);
 
-// Product-name lookup uses the public Open Food Facts database (no project backend required).
-const OFF_API = 'https://world.openfoodfacts.org/cgi/search.pl';
+// Product-name lookup uses Open Food Facts. Public read access needs no API key.
+// Search India-tagged products first, then fall back to the global catalogue.
+const OFF_API = '/api/off';
+const OFF_FIELDS = 'product_name,brands,nutriments,nutriscore_grade,nutrition_grades,code,image_front_url,quantity,categories,countries,countries_tags';
+const OFF_HEADERS = { 'Accept': 'application/json' };
 const searchForm = $('productSearchForm');
 const matchesEl = $('productMatches');
 const searchStatus = $('searchStatus');
 function setSearchStatus(message, isError=false) { searchStatus.textContent=message; searchStatus.classList.toggle('error-text',isError); searchStatus.hidden=!message; }
 function safeText(value,fallback='Not provided') { return value===undefined||value===null||value===''?fallback:String(value); }
+function isIndiaProduct(p) { const tags=(p.countries_tags||[]).map(v=>String(v).toLowerCase()); const countries=String(p.countries||'').toLowerCase(); return tags.some(v=>v==='en:india'||v.endsWith(':india'))||/(^|[,; ])india([,; ]|$)/.test(countries); }
 function gradeLabel(grade) { const map={a:'A · Excellent',b:'B · Good',c:'C · Moderate',d:'D · Poor',e:'E · Poor'}; return map[String(grade||'').toLowerCase()]||'Not available'; }
 function productToNutrients(p) {
  const n=p.nutriments||{};
@@ -25,30 +29,48 @@ function showProductMatches(products) {
   const details=document.createElement('div');details.className='product-match-details';
   const title=document.createElement('h3');title.textContent=safeText(product.product_name,'Unnamed product');
   const brand=document.createElement('p');brand.textContent=safeText(product.brands,'Brand not listed');
-  const meta=document.createElement('p');meta.className='product-meta';meta.textContent=`Nutri-Score: ${gradeLabel(product.nutriscore_grade||product.nutrition_grades)} · Barcode: ${safeText(product.code,'Not listed')}`;
+  const meta=document.createElement('p');meta.className='product-meta';meta.textContent=`${product.sourceLabel|| (isIndiaProduct(product)?'India-tagged listing':'Open Food Facts')} · Nutri-Score: ${gradeLabel(product.nutriscore_grade||product.nutrition_grades)} · Barcode: ${safeText(product.code,'Not listed')}`;
   const choose=document.createElement('button');choose.type='button';choose.className='secondary-btn';choose.textContent='Use this product';choose.addEventListener('click',()=>useProduct(product));
   details.append(title,brand,meta,choose);card.append(details);matchesEl.append(card);
  });
 }
 async function searchProducts(name,brand) {
- matchesEl.hidden=true;matchesEl.innerHTML='';setSearchStatus('Searching product database…');$('productSearchBtn').disabled=true;
- try {
-  const terms=[name.trim(),brand.trim()].filter(Boolean).join(' ');
-  const params=new URLSearchParams({search_terms:terms,search_simple:'1',action:'process',json:'1',page_size:'12',fields:'product_name,brands,nutriments,nutriscore_grade,nutrition_grades,code,image_front_url,quantity,categories'});
-  const response=await fetch(`${OFF_API}?${params.toString()}`,{headers:{'Accept':'application/json'}});
-  if(!response.ok)throw new Error(`Product database returned HTTP ${response.status}.`);
-  const data=await response.json();const products=(data.products||[]).filter(p=>p.product_name&&p.nutriments);
-  showProductMatches(products);setSearchStatus(products.length?`Found ${products.length} possible match(es). Confirm the product name and brand before selecting.`:'No usable matches found. Try a shorter product name or upload the label image.');
- } catch(error) { setSearchStatus(`Could not search the product database. Check your internet connection and try again. (${error.message})`,true); }
- finally {$('productSearchBtn').disabled=false;}
+ matchesEl.hidden=true;matchesEl.innerHTML='';setSearchStatus('Searching available food databases…');$('productSearchBtn').disabled=true;
+ const terms=[name.trim(),brand.trim()].filter(Boolean).join(' ');
+ const offSearch=async(indiaOnly)=>{
+  const params=new URLSearchParams({search_terms:terms,...(indiaOnly?{countries_tags:'en:india'}:{})});
+  const response=await fetch(`${OFF_API}?${params.toString()}`,{headers:{Accept:'application/json'}});
+  if(!response.ok)throw new Error(`Open Food Facts returned HTTP ${response.status}`);
+  const data=await response.json();
+  return (data.products||[]).filter(p=>p.product_name&&p.nutriments).map(p=>({...p,source:'off',sourceLabel:'Open Food Facts'}));
+ };
+ const usdaSearch=async()=>{
+  const response=await fetch(`/api/usda?query=${encodeURIComponent(terms)}`,{headers:{Accept:'application/json'}});
+  if(!response.ok) { const err=await response.json().catch(()=>({})); throw new Error(err.error||`USDA returned HTTP ${response.status}`); }
+  const data=await response.json();
+  return (data.products||[]).map(p=>({...p,source:'usda',sourceLabel:'USDA FoodData Central'}));
+ };
+ const settled=await Promise.allSettled([offSearch(true),usdaSearch()]);
+ let offProducts=[],usdaProducts=[],errors=[];
+ if(settled[0].status==='fulfilled')offProducts=settled[0].value;else errors.push(settled[0].reason.message);
+ if(settled[1].status==='fulfilled')usdaProducts=settled[1].value;else errors.push(settled[1].reason.message);
+ if(!offProducts.length && settled[0].status==='fulfilled'){
+  try{offProducts=await offSearch(false);}catch(error){errors.push(error.message);}
+ }
+ offProducts.sort((a,b)=>Number(isIndiaProduct(b))-Number(isIndiaProduct(a)));
+ const products=[...offProducts,...usdaProducts].slice(0,24);
+ showProductMatches(products);
+ if(products.length) setSearchStatus(`Found ${products.length} possible match(es). Sources: ${[offProducts.length?'Open Food Facts':'',usdaProducts.length?'USDA FoodData Central':''].filter(Boolean).join(' and ')}. Confirm the exact food and label before using the values.`);
+ else setSearchStatus(`No results returned. ${errors.length?errors.join(' · '):'Try a shorter name or upload the nutrition label.'}`,true);
+ $('productSearchBtn').disabled=false;
 }
 searchForm.addEventListener('submit',event=>{event.preventDefault();const name=$('productName').value.trim();if(name.length<2){setSearchStatus('Enter the product name as printed on the packet.',true);return;}searchProducts(name,$('productBrand').value);});
 function useProduct(product) {
  const values=productToNutrients(product);
  if(!Object.values(values).some(v=>v!==null)){setSearchStatus('This database entry does not contain enough nutrition information. Try another result or upload the label.',true);return;}
  extracted=values;renderNutrients(values);
- $('rawText').value=`Product: ${product.product_name||''}\nBrand: ${product.brands||''}\nSource: Open Food Facts\nBarcode: ${product.code||''}\nNutri-Score: ${product.nutriscore_grade||product.nutrition_grades||'not provided'}\nNutrient values are mapped from database values per 100 g/ml where available.`;
- $('resultSource').textContent=`Selected: ${product.product_name||'Product'}${product.brands?' · '+product.brands:''}. Source: Open Food Facts; data may be incomplete or user-submitted.`;
+ $('rawText').value=`Product: ${product.product_name||''}\nBrand: ${product.brands||''}\nSource: ${product.sourceLabel||'Open Food Facts'}\nBarcode: ${product.code||''}\nNutri-Score: ${product.nutriscore_grade||product.nutrition_grades||'not provided'}\nNutrient values are mapped from database values per 100 g/ml where available.`;
+ $('resultSource').textContent=`Selected: ${product.product_name||'Product'}${product.brands?' · '+product.brands:''}. Source: ${product.sourceLabel||'Open Food Facts'}; data coverage varies; verify against the package label.`;
  $('results').hidden=false;renderScore(null);$('results').scrollIntoView({behavior:'smooth',block:'start'});
 }
 
