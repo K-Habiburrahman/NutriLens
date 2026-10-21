@@ -31,40 +31,88 @@ function showProductMatches(products) {
   const brand=document.createElement('p');brand.textContent=safeText(product.brands,'Brand not listed');
   const meta=document.createElement('p');meta.className='product-meta';meta.textContent=`${product.sourceLabel|| (isIndiaProduct(product)?'India-tagged listing':'Open Food Facts')} · Nutri-Score: ${gradeLabel(product.nutriscore_grade||product.nutrition_grades)} · Barcode: ${safeText(product.code,'Not listed')}`;
   const choose=document.createElement('button');choose.type='button';choose.className='secondary-btn';choose.textContent='Use this product';choose.addEventListener('click',()=>useProduct(product));
-  details.append(title,brand,meta,choose);card.append(details);matchesEl.append(card);
+  details.append(title,brand,meta);
+  if(product.sourceUrl){const source=document.createElement('a');source.href=product.sourceUrl;source.target='_blank';source.rel='noopener noreferrer';source.textContent='View source listing';source.className='product-source-link';details.append(source);}
+  details.append(choose);card.append(details);matchesEl.append(card);
  });
+}
+// Curated fallback records for common Indian products that may be absent from public APIs.
+// Values below are based on retailer-published nutrition listings, not independently lab-tested.
+// Always ask users to verify against the exact packet they have.
+const CURATED_PRODUCTS = [
+ {
+  product_name:'NutriCrunch Classic Digestive Cookies', brands:'Parle Platina', code:'8901719127106',
+  countries:'India', countries_tags:['en:india'], quantity:'1 kg listing', categories:'Biscuits',
+  source:'curated', sourceLabel:'Retailer-listed nutrition data · verify package',
+  sourceUrl:'https://www.bigbasket.com/pd/40204937/parle-platina-nutricrunch-classic-digestive-cookies-1-kg/',
+  nutriments:{'energy-kcal_100g':489,'sugars_100g':14.8,'saturated-fat_100g':9.2,'proteins_100g':6.5,'fiber_100g':6.0,'fat_100g':20.0,'carbohydrates_100g':70.7}
+ },
+ {
+  product_name:'NutriCrunch Digestive Marie', brands:'Parle Platina', code:'891719117541',
+  countries:'India', countries_tags:['en:india'], quantity:'100 g listing', categories:'Biscuits',
+  source:'curated', sourceLabel:'Retailer-listed nutrition data · verify package',
+  sourceUrl:'https://www.bigbasket.com/pd/40057898/parle-platina-nutricrunch-digestive-marie-100-g/',
+  nutriments:{'energy-kcal_100g':440,'sugars_100g':18.6,'proteins_100g':8.3,'fiber_100g':6.5,'fat_100g':10.2,'carbohydrates_100g':78.7}
+ }
+];
+function normalizeProductText(value) {
+ return String(value||'').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');
+}
+function productMatchesQuery(product, query) {
+ const haystack=normalizeProductText(`${product.product_name||''} ${product.brands||''} ${product.categories||''}`);
+ const terms=normalizeProductText(query).split(' ').filter(Boolean);
+ return terms.length>0 && terms.every(term=>haystack.includes(term));
+}
+function dedupeProducts(products) {
+ const seen=new Set();
+ return products.filter(p=>{const key=String(p.code||`${normalizeProductText(p.product_name)}|${normalizeProductText(p.brands)}`).toLowerCase();if(seen.has(key))return false;seen.add(key);return true;});
 }
 async function searchProducts(name,brand) {
  matchesEl.hidden=true;matchesEl.innerHTML='';setSearchStatus('Searching available food databases…');$('productSearchBtn').disabled=true;
- const terms=[name.trim(),brand.trim()].filter(Boolean).join(' ');
- const offSearch=async(indiaOnly)=>{
-  const params=new URLSearchParams({search_terms:terms,...(indiaOnly?{countries_tags:'en:india'}:{})});
-  const response=await fetch(`${OFF_API}?${params.toString()}`,{headers:{Accept:'application/json'}});
+ const cleanName=name.trim(), cleanBrand=brand.trim();
+ const queries=[cleanName,`${cleanName} ${cleanBrand}`.trim()].filter((q,i,a)=>q.length>=2&&a.indexOf(q)===i);
+ const curated=CURATED_PRODUCTS.filter(p=>productMatchesQuery(p,cleanName) || (cleanBrand && productMatchesQuery(p,`${cleanName} ${cleanBrand}`)));
+ const offSearch=async(query,indiaOnly)=>{
+  const params=new URLSearchParams({search_terms:query,...(indiaOnly?{countries_tags:'en:india'}:{})});
+  const response=await fetch(`${OFF_API}?${params.toString()}`,{headers:OFF_HEADERS});
   if(!response.ok)throw new Error(`Open Food Facts returned HTTP ${response.status}`);
   const data=await response.json();
   return (data.products||[]).filter(p=>p.product_name&&p.nutriments).map(p=>({...p,source:'off',sourceLabel:'Open Food Facts'}));
  };
- const usdaSearch=async()=>{
-  const response=await fetch(`/api/usda?query=${encodeURIComponent(terms)}`,{headers:{Accept:'application/json'}});
-  if(!response.ok) { const err=await response.json().catch(()=>({})); throw new Error(err.error||`USDA returned HTTP ${response.status}`); }
+ const usdaSearch=async(query)=>{
+  const response=await fetch(`/api/usda?query=${encodeURIComponent(query)}`,{headers:{Accept:'application/json'}});
+  if(!response.ok){const err=await response.json().catch(()=>({}));throw new Error(err.error||`USDA returned HTTP ${response.status}`);}
   const data=await response.json();
   return (data.products||[]).map(p=>({...p,source:'usda',sourceLabel:'USDA FoodData Central'}));
  };
- const settled=await Promise.allSettled([offSearch(true),usdaSearch()]);
- let offProducts=[],usdaProducts=[],errors=[];
- if(settled[0].status==='fulfilled')offProducts=settled[0].value;else errors.push(settled[0].reason.message);
- if(settled[1].status==='fulfilled')usdaProducts=settled[1].value;else errors.push(settled[1].reason.message);
- if(!offProducts.length && settled[0].status==='fulfilled'){
-  try{offProducts=await offSearch(false);}catch(error){errors.push(error.message);}
- }
- offProducts.sort((a,b)=>Number(isIndiaProduct(b))-Number(isIndiaProduct(a)));
- const products=[...offProducts,...usdaProducts].slice(0,24);
- showProductMatches(products);
- if(products.length) setSearchStatus(`Found ${products.length} possible match(es). Sources: ${[offProducts.length?'Open Food Facts':'',usdaProducts.length?'USDA FoodData Central':''].filter(Boolean).join(' and ')}. Confirm the exact food and label before using the values.`);
- else setSearchStatus(`No results returned. ${errors.length?errors.join(' · '):'Try a shorter name or upload the nutrition label.'}`,true);
- $('productSearchBtn').disabled=false;
+ try {
+  const tasks=[];
+  // Search product name independently; appending the brand can hide valid matches.
+  for(const query of queries){tasks.push(offSearch(query,true).then(products=>({kind:'offIndia',products})));}
+  for(const query of queries){tasks.push(offSearch(query,false).then(products=>({kind:'offGlobal',products})));}
+  // USDA is a useful fallback, but generic foods must not outrank an exact branded match.
+  tasks.push(usdaSearch(cleanName).then(products=>({kind:'usda',products})));
+  const settled=await Promise.allSettled(tasks);
+  const offIndia=[],offGlobal=[],usda=[],errors=[];
+  for(const result of settled){
+   if(result.status==='rejected'){errors.push(result.reason?.message||'A data source failed');continue;}
+   const {kind,products}=result.value;
+   if(kind==='offIndia')offIndia.push(...products);else if(kind==='offGlobal')offGlobal.push(...products);else usda.push(...products);
+  }
+  const apiProducts=dedupeProducts([...offIndia,...offGlobal,...usda]);
+  // Exact locally curated records are first, then India-tagged results, then other sources.
+  const ranked=apiProducts.map(p=>({...p,_score:(isIndiaProduct(p)?20:0)+(normalizeProductText(`${p.product_name} ${p.brands}`).includes(normalizeProductText(cleanName))?30:0)}))
+   .sort((a,b)=>b._score-a._score).map(({_score,...p})=>p);
+  const products=dedupeProducts([...curated,...ranked]).slice(0,24);
+  showProductMatches(products);
+  if(products.length) setSearchStatus(`Found ${products.length} possible match(es). Exact product records are prioritized; confirm the product variant and nutrition label before using the values.`);
+  else setSearchStatus(`No results returned. ${errors.length?[...new Set(errors)].join(' · '):'Try a shorter name, scan the barcode, or upload the nutrition label.'}`,true);
+ } catch(error) {
+  const products=curated;
+  showProductMatches(products);
+  setSearchStatus(products.length?'Showing locally available product records because an online source could not be reached. Verify the exact package label.':`Product search failed: ${error.message}. Try again or upload the nutrition label.`,!products.length);
+ } finally {$('productSearchBtn').disabled=false;}
 }
-searchForm.addEventListener('submit',event=>{event.preventDefault();const name=$('productName').value.trim();if(name.length<2){setSearchStatus('Enter the product name as printed on the packet.',true);return;}searchProducts(name,$('productBrand').value);});
 function useProduct(product) {
  const values=productToNutrients(product);
  if(!Object.values(values).some(v=>v!==null)){setSearchStatus('This database entry does not contain enough nutrition information. Try another result or upload the label.',true);return;}

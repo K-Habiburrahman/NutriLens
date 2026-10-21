@@ -50,6 +50,14 @@ An internet connection is required for external data sources and the Tesseract.j
 - IFCT is primarily useful for raw foods and ingredients. Do not substitute a raw ingredient's nutrient values for a branded packaged product's label.
 - To add searchable IFCT results later, create a structured dataset from a permitted source, carefully transcribe/validate the required values, preserve IFCT food codes and citations, and review reuse/licensing conditions. Do not invent missing nutrient values.
 
+### Curated Indian packaged-product fallback
+
+- NutriLens includes two manually curated fallback entries for Parle Platina NutriCrunch: Classic Digestive Cookies and Digestive Marie. These appear when a search matches the product name, even if an external database does not return the product.
+- The current nutrient values are transcribed from retailer-published nutrition listings and are **not independently lab-tested or guaranteed to match every pack/formulation**. Each entry links to its source listing. Verify values against the physical packet before relying on them.
+- Missing values (for example, sodium where the cited listing does not provide it) are left blank; they are not guessed.
+- To add another product, add a record to `CURATED_PRODUCTS` in `script.js`. Include product name, brand, barcode if verified, India tags, `nutriments` values per 100 g, source label, and a trustworthy `sourceUrl`. Do not invent values or reuse values from a different product variant.
+- Search now queries the product name separately from the optional brand and tries both India-filtered and global Open Food Facts searches. Exact curated entries are ranked first; USDA generic-food results should not be treated as the branded product unless the identity matches.
+
 ## Nutrition field mapping
 
 - Energy is shown in kcal per 100 g/ml when the source provides compatible data.
@@ -79,7 +87,7 @@ The score is an educational heuristic, not a clinically validated tool, official
 
 - `index.html` — page structure and source links
 - `style.css` — layout and styling
-- `script.js` — product search, OCR, extraction and scoring
+- `script.js` — product search, curated Indian product fallback, OCR, extraction and scoring
 - `api/off.mjs` — server-side Open Food Facts proxy for Vercel
 - `api/usda.mjs` — server-side USDA search proxy for Vercel
 

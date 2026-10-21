@@ -118,3 +118,5 @@
 .data-source-strip strong{font-size:12px;line-height:1.4}
 .data-source-strip span{font-size:10px;line-height:1.5;color:var(--muted)}
 @media(max-width:600px){.data-source-strip{grid-template-columns:1fr}}
+
+.product-source-link { display:inline-block; margin:0 0 10px; font-size:.82rem; color:var(--accent,#176b46); text-decoration:underline; }
