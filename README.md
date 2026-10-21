@@ -1,109 +1,44 @@
-# NutriLens — Food Health Analyzer
+# NutriLens — Food Health Analyzer (HTML, CSS & JavaScript)
 
-A browser-based food-label analyzer built with HTML, CSS and JavaScript. Search packaged products, review nutrition data from supported food databases, or upload a nutrition-label image for browser-side OCR.
+A browser-based tool for searching packaged food by product name or analyzing a photo of its printed nutrition label.
+
+## Run it
+1. Extract this folder.
+2. Open `index.html` in a modern browser.
+3. Search using the exact product name and optional brand, or upload a label image.
+4. Confirm the correct matching product, review nutrient values, edit if needed, and calculate the score.
+
+No Node.js, Python, npm, or project backend is required. An internet connection is needed for product search and the OCR library CDN.
 
 ## Features
+- Product name and optional brand search using Open Food Facts.
+- Result cards show available product image, brand, barcode, and Nutri-Score metadata.
+- Maps available nutrient values per 100 g/ml into editable fields.
+- Optional browser-side OCR for products not found in the database.
+- Editable values and an educational score estimate.
+- Responsive layout.
 
-- Searches Open Food Facts with India-tagged results prioritized and global fallback.
-- Searches USDA FoodData Central through a Vercel serverless function when configured.
-- Links to the official Indian Food Composition Tables (IFCT 2017) published by ICMR–National Institute of Nutrition for reference on Indian raw foods.
-- Product images, brand, barcode and available nutrition metadata.
-- Nutrition fields mapped to editable values per 100 g/ml where available.
-- Browser-side OCR using Tesseract.js for labels not found in a database.
-- Transparent educational scoring and nutrient observations.
+## Product data limitations
+Product lookup uses the public Open Food Facts database, which is community-maintained. Coverage and data quality vary; information may be incomplete, outdated, or user-submitted. Search results are possible matches, not proof of an exact package match. Confirm the product name, brand, package size, and barcode when possible.
 
-## Run locally
+The app's calculated score is a simple educational heuristic, not a clinically validated or official regulatory rating. If an official Nutri-Score is available in the database, it is shown separately as source metadata. Do not use this app for diagnosis, allergy safety decisions, or medical advice.
 
-1. Extract the project folder.
-2. For frontend-only testing, serve the folder using a local HTTP server; do not open `index.html` using `file://`.
-3. The USDA integration is a Vercel serverless function in `api/usda.mjs`; it requires `USDA_API_KEY`. Deploy to Vercel or run with the Vercel CLI to test the full integration.
-4. Search a product and confirm its name, brand, barcode and printed label before using values. Alternatively, upload a clear PNG, JPG or WEBP nutrition-label image.
+Product search terms are sent to Open Food Facts. Uploaded images are processed in the browser and are not sent to a project-owned server. If direct API calls are restricted when opening the file locally, deploy the folder to a static host or serve it with a simple static web server; no application backend is required.
 
-An internet connection is required for external data sources and the Tesseract.js CDN.
-
-## Data sources
-
-### Open Food Facts
-
-- Documentation: https://openfoodfacts.github.io/documentation/
-- Used for product-name searches and available branded product records.
-- Read access does not require an API key.
-- India tagging is a best-effort filter, not a guarantee of origin or accuracy. Product records may be incomplete or user-submitted.
-- The app retains a global fallback if no India-tagged matches are found.
-- NutriLens calls Open Food Facts through `api/off.mjs`, a Vercel serverless proxy, to avoid direct browser-origin CORS issues. The upstream service can still be unavailable or rate-limited.
-
-### USDA FoodData Central
-
-- API guide: https://fdc.nal.usda.gov/api-guide.html
-- Search endpoint: `https://api.nal.usda.gov/fdc/v1/foods/search`
-- NutriLens calls `/api/usda`, a Vercel serverless function that keeps the USDA API key on the server.
-- Obtain a key from USDA FoodData Central and set it in Vercel: **Project Settings → Environment Variables → `USDA_API_KEY`**. Redeploy after adding the variable.
-- For local testing with Vercel CLI, add `USDA_API_KEY=your_key` to a local `.env` file (do not commit it). Add `.env` to `.gitignore`.
-- If the key is missing, the app displays a configuration message and other available sources can still be used.
-- FoodData Central includes generic and branded food records, but Indian packaged-product coverage varies. Nutrient fields can be absent. Always verify against the package label.
-
-### Indian Food Composition Tables (IFCT 2017)
-
-- Official reference PDF: https://www.nin.res.in/ebooks/IFCT2017_16122024.pdf
-- IFCT 2017 was published by the Indian Council of Medical Research–National Institute of Nutrition (ICMR–NIN) and reports nutrient composition for 528 key Indian foods.
-- IFCT is a reference publication, not a public live product-search API. In this version, it is linked in the interface for manual reference; its PDF has **not** been silently converted into an app database.
-- IFCT is primarily useful for raw foods and ingredients. Do not substitute a raw ingredient's nutrient values for a branded packaged product's label.
-- To add searchable IFCT results later, create a structured dataset from a permitted source, carefully transcribe/validate the required values, preserve IFCT food codes and citations, and review reuse/licensing conditions. Do not invent missing nutrient values.
-
-### Curated Indian packaged-product fallback
-
-- NutriLens includes two manually curated fallback entries for Parle Platina NutriCrunch: Classic Digestive Cookies and Digestive Marie. These appear when a search matches the product name, even if an external database does not return the product.
-- The current nutrient values are transcribed from retailer-published nutrition listings and are **not independently lab-tested or guaranteed to match every pack/formulation**. Each entry links to its source listing. Verify values against the physical packet before relying on them.
-- Missing values (for example, sodium where the cited listing does not provide it) are left blank; they are not guessed.
-- To add another product, add a record to `CURATED_PRODUCTS` in `script.js`. Include product name, brand, barcode if verified, India tags, `nutriments` values per 100 g, source label, and a trustworthy `sourceUrl`. Do not invent values or reuse values from a different product variant.
-- Search now queries the product name separately from the optional brand and tries both India-filtered and global Open Food Facts searches. Exact curated entries are ranked first; USDA generic-food results should not be treated as the branded product unless the identity matches.
-
-## Nutrition field mapping
-
-- Energy is shown in kcal per 100 g/ml when the source provides compatible data.
-- Sugars, saturated fat, protein, fibre and total fat are mapped when available.
-- Sodium is displayed in mg. If a source reports salt instead of sodium, the app may derive an estimate; check the original label.
-- Missing values remain blank; they are not assumed to be zero.
-- Nutrient fields from different databases may use different definitions or food states. Compare like with like and review the source record.
-
-## API authentication and secrets
-
-- Open Food Facts read-only lookup does not require a private key.
-- USDA credentials are used only by `api/usda.mjs` via the server-side `USDA_API_KEY` environment variable.
-- Never put private keys, passwords or tokens in `script.js`, HTML, or any browser-delivered file. Never commit `.env` or real credentials.
-- Both data proxies only permit GET requests and limit query length; responses are cached briefly.
-
-## Nutrition score and safety limitations
-
-The score is an educational heuristic, not a clinically validated tool, official Nutri-Score, FSSAI certification, or medical assessment. It is not a substitute for checking ingredients, allergens, serving sizes or the printed label. Do not use the app for diagnosis, allergy safety decisions, or medical advice.
-
-## Privacy
-
-- Search terms are sent to the selected external data providers.
-- Uploaded label images are processed in the browser and are not uploaded to a project-owned server.
-- Tesseract.js and its language data are downloaded from a CDN.
-
-## Project files
-
-- `index.html` — page structure and source links
+## Files
+- `index.html` — page structure
 - `style.css` — layout and styling
-- `script.js` — product search, curated Indian product fallback, OCR, extraction and scoring
-- `api/off.mjs` — server-side Open Food Facts proxy for Vercel
-- `api/usda.mjs` — server-side USDA search proxy for Vercel
+- `script.js` — product search, OCR, extraction, and scoring
+
+## Third-party service
+Open Food Facts is an independent third-party data service. Review its current API and database terms before commercial use.
+
 
 ## Troubleshooting
 
-- **USDA says it is not configured:** Add `USDA_API_KEY` in Vercel Project Settings → Environment Variables, then redeploy.
-- **Product search fails:** Test the deployed site, inspect the Network tab, and check whether the provider is reachable. The app uses a same-origin Vercel proxy; inspect the relevant `/api/off` or `/api/usda` response for provider errors.
-- **No Indian product match appears:** Coverage and country tags may be incomplete. Try a shorter name or upload the printed label.
-- **Tesseract.js tracking-prevention warning:** It may be a browser privacy warning. If OCR fails to load, try another browser/session or self-host the OCR assets.
-- **Local `file://` CORS errors:** Run through a local HTTP server or Vercel CLI instead of opening the HTML file directly.
+- **`Cannot access '$' before initialization`:** This was caused by the DOM helper being declared after product-search code. The fixed version declares the helper first.
+- **Tracking Prevention warning for Tesseract.js CDN:** This is usually a browser privacy warning about third-party storage access, not the same as a JavaScript exception. The page still needs internet access to download Tesseract.js and its OCR language data. If OCR does not load, try a browser session that permits the CDN, or use the product-name search instead. Product-name search does not depend on Tesseract.js.
+- If product search fails, check internet connectivity and whether the browser/network allows requests to `world.openfoodfacts.org`.
 
-## Third-party services
-
-- Open Food Facts: https://openfoodfacts.org/
-- USDA FoodData Central: https://fdc.nal.usda.gov/
-- ICMR–NIN IFCT 2017: https://www.nin.res.in/ebooks/IFCT2017_16122024.pdf
-- Tesseract.js: https://github.com/naptha/tesseract.js
-
-Review each source's current terms, licensing and attribution requirements before commercial use.
+### Understanding why a product gets a low rating
+After calculating a score, the **What we noticed** section explains which available values may be driving the result—for example, high sugar, saturated fat, sodium, or energy density. The footer explains how to interpret these approximate educational guides; they are not an official Nutri-Score or medical assessment. Check that nutrient fields use the same basis (per 100 g/ml versus per serving).
